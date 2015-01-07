@@ -90,7 +90,7 @@ def sample_harvest(magic_number):
 
 
 # This was the initial idea and inspiration for this file of code.
-# Unfortunately, plating 5 cells takes forever, so I never got to 9,
+# Unfortunately, planting 5 cells takes forever, so I never got to 9,
 # nor did I do any subsequent analysis of the resulting seeds. Oh well.
 def sample_harvest_9():
     """Return the results of farming a 9x9 grid with up to 9 cells."""
