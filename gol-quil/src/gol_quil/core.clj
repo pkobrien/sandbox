@@ -21,12 +21,17 @@
   (q/color-mode :hsb)
   {:cell-size 8
    :cells (into (hash-map) (map #(conj [%1] 0) (seed)))
-   :generation 0})
+   :frame 0
+   :generation 0
+   :running false})
 
 (defn update [state]
-  (assoc state
-    :cells (step (:cells state))
-    :generation (inc (:generation state))))
+  (let [state (update-in state [:frame] inc)]
+    (if (:running state)
+      (assoc state
+        :cells (step (:cells state))
+        :generation (inc (:generation state)))
+      state)))
 
 (defn draw [state]
   (q/background 120)
@@ -36,11 +41,16 @@
   (q/text (str "Generation: "  (:generation state)) 20 40)
   (q/text (str "Population: "  (count (:cells state))) 20 60)
   (q/text (str "Oldest Age: "  (apply max (vals (:cells state)))) 20 80)
-  ; (q/text (str "Frequencies: " (frequencies (vals (:cells state)))) 20 100)
+  (q/text (str "Frame:      "  (:frame state)) 20 120)
+  (q/text (str "Frame Rate: "  (q/current-frame-rate)) 20 140)
+  (q/text (str "Running:    "  (:running state)) 20 160)
   (doseq [[[x y] age] (:cells state)
           :let [w (:cell-size state)]]
     (q/fill (min age 255))
     (q/rect (* w x) (* w y) w w 2)))
+
+(defn mouse-clicked [state event]
+  (update-in state [:running] not))
 
 (defn mouse-wheel [state event]
   (assoc state :cell-size (max (- (:cell-size state) event) 1)))
@@ -53,4 +63,6 @@
   :setup setup
   :update update
   :draw draw
+;  :key-pressed key-pressed
+  :mouse-clicked mouse-clicked
   :mouse-wheel mouse-wheel)
