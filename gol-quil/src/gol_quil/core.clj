@@ -2,7 +2,7 @@
   (:require [quil.core :as q]
             [quil.middleware :as m]))
 
-(defn seed []
+(defn get-seed []
   #{; Acorn
     [70 62] [71 60] [71 62] [73 61] [74 62] [75 62] [76 62]
     })
@@ -11,19 +11,32 @@
   (map vector ((juxt inc      inc identity dec dec      dec identity inc) x)
               ((juxt identity inc inc      inc identity dec dec      dec) y)))
 
+;; (defn get-colors [k cells]
+;;   (map #(:color %1) (keep #(get cells %1) (neighbors k))))
+
+(defn create-cell
+  ([]
+   {:age 0 :color {:r (rand-int 256) :g (rand-int 256) :b (rand-int 256)}})
+  ([k cells]
+   ; Set the color of this newborn cell using a blend of the colors of its 3 living neighbors.
+   (let [[color1 color2 color3] (map #(:color %1) (keep #(get cells %1) (neighbors k)))]
+     {:age 0 :color {:r (:r color1) :g (:g color2) :b (:b color3)}})))
+
 (defn step [cells]
   (into (hash-map) (for [[k n] (frequencies (mapcat neighbors (keys cells)))
-                         :when (or (= n 3) (and (= n 2) (get cells k)))]
-                     [k (inc (get cells k 0))])))
+                         :when (or (= n 3) (and (= n 2) (contains? cells k)))]
+                     [k (update-in (or (get cells k) (create-cell k cells)) [:age] inc)])))
+
+(defn setup-cells [seed]
+  (into (hash-map) (map #(conj [%1] (create-cell)) seed)))
 
 (defn setup []
   (q/frame-rate 60)
-  (q/color-mode :hsb)
   {:cell-size 8
-   :cells (into (hash-map) (map #(conj [%1] 0) (seed)))
+   :cells (setup-cells (get-seed))
    :frame 0
    :generation 0
-   :running false})
+   :running true})
 
 (defn update [state]
   (let [state (update-in state [:frame] inc)]
@@ -40,13 +53,14 @@
   (q/text-size 20)
   (q/text (str "Generation: "  (:generation state)) 20 40)
   (q/text (str "Population: "  (count (:cells state))) 20 60)
-  (q/text (str "Oldest Age: "  (apply max (vals (:cells state)))) 20 80)
+  (q/text (str "Oldest Age: "  (apply max (map #(:age %1) (vals (:cells state))))) 20 80)
   (q/text (str "Frame:      "  (:frame state)) 20 120)
   (q/text (str "Frame Rate: "  (q/current-frame-rate)) 20 140)
   (q/text (str "Running:    "  (:running state)) 20 160)
-  (doseq [[[x y] age] (:cells state)
-          :let [w (:cell-size state)]]
-    (q/fill (min age 255))
+  (doseq [[[x y] cell] (:cells state)
+          :let [w (:cell-size state) color (:color cell)]]
+    ;(q/fill (min (:age cell) 255))
+    (q/fill (:r color) (:g color) (:b color))
     (q/rect (* w x) (* w y) w w 2)))
 
 (defn mouse-clicked [state event]
@@ -63,6 +77,5 @@
   :setup setup
   :update update
   :draw draw
-;  :key-pressed key-pressed
   :mouse-clicked mouse-clicked
   :mouse-wheel mouse-wheel)
