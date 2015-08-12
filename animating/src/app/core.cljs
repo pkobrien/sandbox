@@ -3,6 +3,7 @@
     [clojure.string :as string]
     [goog.dom :as dom]
     [goog.object]
+    [hipo.core :as hipo]
     [ion.poly.core :as poly]
     [shodan.console :as console :include-macros true]
     [shodan.inspection :refer [inspect]]))
@@ -46,8 +47,8 @@
 (defn app-div [] (poly/get-element :app))
 
 (defn slider [state param value min max]
-  [:input {:type      "range" :value value :min min :max max
-           :style     {:width "100%"}
+  [:input {:type "range" :value value :min min :max max
+           :style {:width "100%"}
            :on-change (fn [e]
                         (swap! state assoc param (.-target.value e)))}])
 
@@ -104,15 +105,13 @@
   (teardown)
   (setup))
 
-;; [:button {:onClick (partial toggle-animating! bounce-state)} "Start/Stop"]
-
 (defn ^:export on-init []
   (console/info "on-init")
-  (let [canvas (dom/createElement "canvas")]
-    (goog.object/set canvas "id" "bounce-canvas")
-    (goog.object/set canvas "width" (:w @bounce-state))
-    (goog.object/set canvas "height" (:h @bounce-state))
-    (dom/appendChild (poly/get-body) canvas))
+  (let [div (hipo/create
+              [:div
+               [:button {:on-click (partial toggle-animating! bounce-state)} "Start/Stop"]
+               [:canvas#bounce-canvas {:width (:w @bounce-state) :height (:h @bounce-state)}]])]
+    (dom/appendChild (poly/get-body) div))
   (let [canvas (poly/get-element "bounce-canvas")
         context (.getContext canvas "2d")]
     (swap! bounce-state assoc :canvas canvas)

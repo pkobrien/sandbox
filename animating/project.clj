@@ -8,6 +8,7 @@
    [pandeiro/boot-http "0.6.3-SNAPSHOT" :scope "test"]
    [org.clojure/clojure "1.7.0"]
    [org.clojure/clojurescript "1.7.58"]
+   [hipo "0.5.0"]
    [ion/poly "0.1.0-SNAPSHOT"]
    [shodan "0.4.2"]]
   :source-paths

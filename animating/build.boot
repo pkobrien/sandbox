@@ -10,6 +10,7 @@
     [org.clojure/clojure "1.7.0"]
     [org.clojure/clojurescript "1.7.58"]
     ; Libraries
+    [hipo "0.5.0"]
     [ion/poly "0.1.0-SNAPSHOT"]
     [shodan "0.4.2"]
   ])
