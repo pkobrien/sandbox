@@ -75,7 +75,7 @@
     (poly/listen-animation-frame! anim)))
 
 (defn start-animating! [state]
-  (poly/listen-animation-frame! #(animate* state)))
+  (poly/request-animation-frame! #(animate* state)))
 
 (defn stop-animating! [state]
   (console/info "setting :animate? to false")
