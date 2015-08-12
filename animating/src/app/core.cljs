@@ -11,12 +11,33 @@
 
 
 ;; -----------------------------------------------------------------------------
-;; App State
+;; Animation Cycle
 
-(defonce app-state
-  (atom
-    {:name "Animating"
-     }))
+(defn animate! [step state timestamp]
+  (if (:animate? @state)
+    (step state timestamp)
+    (console/info "animate! has stopped"))
+  (:animate? @state))
+
+(defn- animate* [state]
+  (console/info "setting :animate? to true")
+  (swap! state assoc :animate? true)
+  (let [step (:animate! @state)
+        anim (partial animate! step state)]
+    (console/info "animate! has started")
+    (poly/listen-animation-frame! anim)))
+
+(defn start-animating! [state]
+  (poly/request-animation-frame! #(animate* state)))
+
+(defn stop-animating! [state]
+  (console/info "setting :animate? to false")
+  (swap! state assoc :animate? false))
+
+(defn toggle-animating! [state]
+  (if (:animate? @state)
+    (stop-animating! state)
+    (start-animating! state)))
 
 
 ;; -----------------------------------------------------------------------------
@@ -58,33 +79,12 @@
 
 
 ;; -----------------------------------------------------------------------------
-;; Animation Cycle
+;; App State
 
-(defn animate! [step state timestamp]
-  (if (:animate? @state)
-    (step state timestamp)
-    (console/info "animate! has stopped"))
-  (:animate? @state))
-
-(defn- animate* [state]
-  (console/info "setting :animate? to true")
-  (swap! state assoc :animate? true)
-  (let [step (:animate! @state)
-        anim (partial animate! step state)]
-    (console/info "animate! has started")
-    (poly/listen-animation-frame! anim)))
-
-(defn start-animating! [state]
-  (poly/request-animation-frame! #(animate* state)))
-
-(defn stop-animating! [state]
-  (console/info "setting :animate? to false")
-  (swap! state assoc :animate? false))
-
-(defn toggle-animating! [state]
-  (if (:animate? @state)
-    (stop-animating! state)
-    (start-animating! state)))
+(defonce app-state
+  (atom
+    {:name "Animating"
+     }))
 
 
 ;; -----------------------------------------------------------------------------
@@ -103,6 +103,8 @@
   (console/info "on-load")
   (teardown)
   (setup))
+
+;; [:button {:onClick (partial toggle-animating! bounce-state)} "Start/Stop"]
 
 (defn ^:export on-init []
   (console/info "on-init")
