@@ -1,3 +1,10 @@
+*.iml
+out/
+target/
+.idea/
+.nrepl*
+.repl*
+
 # Spyder Python IDE
 .spyderproject
 
