@@ -12,6 +12,7 @@
     ; Libraries
     [hipo "0.5.0"]
     [ion/poly "0.1.0-SNAPSHOT"]
+    [rm-hull/monet "0.2.1"]
     [shodan "0.4.2"]
   ])
 

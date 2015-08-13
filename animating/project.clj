@@ -10,6 +10,7 @@
    [org.clojure/clojurescript "1.7.58"]
    [hipo "0.5.0"]
    [ion/poly "0.1.0-SNAPSHOT"]
+   [rm-hull/monet "0.2.1"]
    [shodan "0.4.2"]]
   :source-paths
   ["src"])
