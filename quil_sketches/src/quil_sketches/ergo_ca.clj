@@ -4,53 +4,6 @@
             [quil.core :as q]
             [quil.middleware :as m]))
 
-(defn produce-2d
-  "Returns a lazy sequence of grids where a grid is a vector of vectors of
-   cells."
-  [seed get-cell-creator-fn]
-  (letfn [(process
-            [grid]
-            (lazy-seq
-              (when (seq grid)
-                (let [cell-creator (get-cell-creator-fn grid)
-                      make-cell (fn [x y cell]
-                                  (cell-creator x y cell))
-                      inner (fn [x column]
-                              (into (empty column)
-                                    (map-indexed (partial make-cell x)) column))
-                      new-grid (into (empty grid)
-                                     (map-indexed inner) grid)]
-                  (cons new-grid (process new-grid))))))]
-    (process seed)))
-
-(defprotocol IGrid-2D
-  (col-count [this])
-  (row-count [this])
-  )
-
-(deftype Grid-2D [grid]
-  IGrid-2D
-  (col-count [_] (count grid))
-  (row-count [_] (count (peek grid))))
-
-(defn ca-2d-grid-system
-  [seed grid-creator get-cell-creator-fn]
-  (cons (grid-creator seed) (map grid-creator (produce-2d seed get-cell-creator-fn))))
-
-(defrecord Cell [age color state])
-
-(defmethod clojure.core/print-method Cell [this ^java.io.Writer writer]
-  (.write writer (str "<Cell " (:age this) " " (:color this) ">")))
-
-(defn make-cell
-  ([]
-   (->Cell 0 (rand-int 360) :off))
-  ([age color state]
-   (->Cell age color state)))
-
-(defn make-seed [w h]
-  (vec (map vec (partition h (take (* w h) (repeatedly make-cell))))))
-
 
 (def neighborhood-4-x (juxt inc identity dec identity))
 (def neighborhood-4-y (juxt identity inc identity dec))
@@ -88,6 +41,77 @@
    (map vector ((neighborhood-8-tx tx) x) ((neighborhood-8-ty ty) y))))
 
 
+(defn produce-2d
+  "Returns a lazy sequence of grids where a grid is a vector of vectors of
+   cells."
+  [seed get-cell-creator-fn]
+  (letfn [(process
+            [grid]
+            (lazy-seq
+              (when (seq grid)
+                (let [cell-creator (get-cell-creator-fn grid)
+                      create-cell (fn [x y cell]
+                                    (cell-creator x y cell))
+                      inner (fn [x column]
+                              (into (empty column)
+                                    (map-indexed (partial create-cell x))
+                                    column))
+                      new-grid (into (empty grid)
+                                     (map-indexed inner)
+                                     grid)]
+                  (cons new-grid (process new-grid))))))]
+    (process seed)))
+
+(defprotocol IGrid-2D
+  (col-count [this])
+  (row-count [this])
+  )
+
+(deftype Grid-2D [grid]
+  IGrid-2D
+  (col-count [_] (count grid))
+  (row-count [_] (count (peek grid))))
+
+(defn ca-2d-grid-system
+  [seed grid-creator get-cell-creator-fn]
+  (cons (grid-creator seed) (map grid-creator (produce-2d seed get-cell-creator-fn))))
+
+(defrecord Cell [age color state])
+
+(defrecord Cell-N8 [n8 age color state])
+
+(defmethod clojure.core/print-method Cell [this ^java.io.Writer writer]
+  (.write writer (str "<Cell " (:age this) " " (:color this) ">")))
+
+(defn make-cell
+  ([]
+   (->Cell 0 (rand-int 360) :off))
+  ([age color state]
+   (->Cell age color state)))
+
+(defn make-cell-n8
+  ([n8]
+   (->Cell-N8 n8 0 (rand-int 360) :off))
+  ([n8 age color state]
+   (->Cell-N8 n8 age color state)))
+
+(defn make-seed [w h]
+  (vec (map vec (partition h (take (* w h) (repeatedly make-cell))))))
+
+(defn make-seed-f [w h f]
+  (vec (map vec (partition h (take (* w h) (f w h))))))
+
+(defn td [extent]
+  (fn [i]
+    (mod i extent)))
+
+(defn make-seed-cells-n8 [w h]
+  (let [tx (td w)
+        ty (td h)]
+    (for [x (range w)
+          y (range h)]
+      (make-cell-n8 (vec (neighborhood-8 tx ty [x y]))))))
+
 (defn create-cell [gen w h grid tx ty x y cell]
   (let [neighbors (map #(get-in grid %) (neighborhood-4 tx ty [x y]))
         avg-color (/ (reduce + (map :color neighbors)) (count neighbors))]
@@ -101,20 +125,27 @@
         avg-color (/ (reduce + (map :color neighbors)) (count neighbors))]
     (->Cell (inc (:age cell)) avg-color (:state cell))))
 
-#_(defn create-colored-8-cell
-  "Returns a cell whose color is a slow move towards the average of its
-   neighbors."
+(defn create-colored-8-cell
+  "Returns a cell whose color moves towards the average of its neighbors."
   [gen w h grid tx ty x y cell]
   (let [neighbors (map #(get-in grid %) (neighborhood-8 tx ty [x y]))
         avg-color (/ (reduce + (map :color neighbors)) (count neighbors))]
     (->Cell (inc (:age cell)) (/ (+ (:color cell) avg-color) 2) (:state cell))))
 
-(defn create-colored-8-cell
+#_(defn create-colored-8-cell
   "Returns a cell whose color the average of its own and a random neighbor."
   [gen w h grid tx ty x y cell]
   (let [neighbors (map #(get-in grid %) (neighborhood-8 tx ty [x y]))
         random-color (rand-nth (map :color neighbors))]
     (->Cell (inc (:age cell)) (/ (+ (:color cell) random-color) 2) (:state cell))))
+
+(defn create-colored-n8-cell
+  "Returns a cell whose color moves towards the average of its neighbors."
+  [gen w h grid x y cell]
+  (let [neighbors (map #(get-in grid %) (:n8 cell))
+        avg-color (/ (reduce + (map :color neighbors)) (count neighbors))]
+    (->Cell-N8 (:n8 cell) (inc (:age cell)) (/ (+ (:color cell) avg-color) 2) (:state cell))))
+
 
 (defn make-ca-system
   [w h]
@@ -156,26 +187,43 @@
       (ergo/gen (fn get-cell-fn [gen grid]
                   (partial create-colored-8-cell gen w h grid tx ty))))))
 
+(defn make-ca-system-colored-n8
+  [w h]
+  (ca-2d-grid-system
+    (make-seed-f w h make-seed-cells-n8)
+    ->Grid-2D
+    (ergo/gen (fn get-cell-fn [gen grid]
+                (partial create-colored-n8-cell gen w h grid)))))
+
 
 ; ------------------------------------------------------------------------------
 ; Benchmarking
 
+(defn bench [f]
+  (cr/with-progress-reporting (cr/quick-bench (f) :verbose)))
+
 (comment
 
-  (cr/with-progress-reporting ; Unoptimized: 5.87 sec
-    (cr/quick-bench (-> (make-ca-system 72 36) (nth 60)) :verbose))
+  (bench ; Unoptimized color average of 4 neighbors: 6.00 sec
+    #(-> (make-ca-system 72 36) (nth 60)))
 
-  (cr/with-progress-reporting ; Make seeds: 214 ms
-    (cr/quick-bench (dorun 60 (repeatedly #(make-seed 72 36))) :verbose))
+  (bench ; Make seeds: 222 ms
+    #(dorun 60 (repeatedly (fn [] (make-seed 72 36)))))
 
-  (cr/with-progress-reporting ; Only increments age: 344 ms
-    (cr/quick-bench (-> (make-ca-system-aged 72 36) (nth 60)) :verbose))
+  (bench ; Make seeds n8: 2.69 sec
+    #(dorun 60 (repeatedly (fn [] (make-seed-f 72 36 make-seed-cells-n8)))))
 
-  (cr/with-progress-reporting ; Color average of 4 neighbors: 5.87 sec
-    (cr/quick-bench (-> (make-ca-system-colored-4 72 36) (nth 60)) :verbose))
+  (bench ; Only increments age: 364 ms
+    #(-> (make-ca-system-aged 72 36) (nth 60)))
 
-  (cr/with-progress-reporting ; Color average of 8 neighbors: 14.33 sec
-    (cr/quick-bench (-> (make-ca-system-colored-8 72 36) (nth 60)) :verbose))
+  (bench ; Color average of 4 neighbors: 6.00 sec
+    #(-> (make-ca-system-colored-4 72 36) (nth 60)))
+
+  (bench ; Color average of 8 neighbors: 20.5 sec
+    #(-> (make-ca-system-colored-8 72 36) (nth 60)))
+
+  (bench ; Color average of n8 neighbors: 17.48 sec
+    #(-> (make-ca-system-colored-n8 72 36) (nth 60)))
 
   )
 
@@ -261,5 +309,7 @@
   (sketch (setup-opts 20) (get-state (make-ca-system-colored-4 72 36)))
 
   (sketch (setup-opts 1) (get-state (make-ca-system-colored-8 72 36)))
+
+  (sketch (setup-opts 10) (get-state (make-ca-system-colored-n8 72 36)))
 
   )
