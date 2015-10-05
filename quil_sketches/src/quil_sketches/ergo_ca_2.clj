@@ -55,28 +55,6 @@
 (defn make-seed-for-color [w h]
   (make-seed-f w h #(repeatedly random-color)))
 
-(defn td [extent]
-  (let [extent (long extent)]
-    (fn [i]
-      (mod (long i) extent))))
-
-(defn ->xy [height i]
-  (let [i (long i)
-        height (long height)]
-    [(quot i height) (mod i height)]))
-
-;(defn neighbors-8 [word tx ty width i]
-;  (map (fn [[x y]] (nth word (+ x (* y width))))
-;       (neighborhood-8 tx ty (->xy width i))))
-
-;(defn color [generation word tx ty width]
-;  (let [index (volatile! (long -1))]
-;    (fn context-sensitive-color [cell-color]
-;      (vswap! index #(inc (long %)))
-;      (let [neighbors (neighbors-8 word tx ty width @index)
-;            avg-color (int (/ (reduce + neighbors) (count neighbors)))]
-;        (int (/ (+ cell-color avg-color) 2))))))
-
 (defn color [generation word n8]
   (let [index (volatile! (long -1))]
     (fn context-sensitive-color [cell-color]
@@ -98,15 +76,34 @@
       (vswap! generation #(inc (long %)))
       (f @generation data))))
 
-(defn make-index-n8 [w h]
+(defn td
+  "Returns a function that returns the toroidal value of i for an extent."
+  [extent]
+  (let [extent (long extent)]
+    (fn [i]
+      (mod (long i) extent))))
+
+(defn hi->xy
+  "Returns the [x y] coordinates for index based on the height of the grid."
+  [h i]
+  (let [h (long h)
+        i (long i)]
+    [(quot i h) (mod i h)]))
+
+(defn whxy->i
+  "Returns the index for the [x y] coordinates with toroidal adjustments."
+  [w h [x y]]
   (let [w (long w)
         h (long h)
         tx (td w)
-        ty (td h)
-        t8 (partial neighborhood-8 tx ty)]
+        ty (td h)]
+    (+ (* (long (tx x)) h) (long (ty y)))))
+
+(defn make-index-n8 [w h]
+  (let [xy->i (partial whxy->i w h)]
     (into [] (for [x (range w)
                    y (range h)]
-               (vec (map (fn [[x y]] (+ (* (long x) h) (long y))) (t8 [x y])))))))
+               (vec (map xy->i (neighborhood-8 [x y])))))))
 
 (defn ca-for-color [w h]
   (let [n8 (make-index-n8 w h)]
@@ -163,7 +160,7 @@
         size (int (:cell-size state))
         top (int (:top-margin state))
         height (:ca-height state)
-        i->xy (partial ->xy height)]
+        i->xy (partial hi->xy height)]
     (doseq [[i color] (map vector (range) cells)]
       (q/fill color 100 100)
       (let [[x y] (i->xy i)
