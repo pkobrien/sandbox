@@ -4,6 +4,11 @@
             [quil.core :as q]
             [quil.middleware :as m]))
 
+
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
+
+
 (def neighborhood-8-x (juxt inc inc identity dec dec dec identity inc))
 (def neighborhood-8-y (juxt identity inc inc inc identity dec dec dec))
 
@@ -40,10 +45,10 @@
   (cons seed (produce seed identity get-xf)))
 
 (defn make-seed-f [w h f]
-  (vec (take (* w h) (f))))
+  (vec (take (* (long w) (long h)) (f))))
 
 (defn make-seed-for-age [w h]
-  (make-seed-f w h #(repeat 0)))
+  (make-seed-f w h #(repeat (long 0))))
 
 (def random-color (partial rand-int 360))
 
@@ -51,11 +56,14 @@
   (make-seed-f w h #(repeatedly random-color)))
 
 (defn td [extent]
-  (fn [i]
-    (mod i extent)))
+  (let [extent (long extent)]
+    (fn [i]
+      (mod (long i) extent))))
 
 (defn ->xy [height i]
-  [(quot i height) (mod i height)])
+  (let [i (long i)
+        height (long height)]
+    [(quot i height) (mod i height)]))
 
 ;(defn neighbors-8 [word tx ty width i]
 ;  (map (fn [[x y]] (nth word (+ x (* y width))))
@@ -74,8 +82,8 @@
     (fn context-sensitive-color [cell-color]
       (vswap! index #(inc (long %)))
       (let [neighbors (map #(nth word %) (nth n8 @index))
-            avg-color (int (/ (reduce + neighbors) (count neighbors)))]
-        (int (/ (+ cell-color avg-color) 2))))))
+            avg-color (quot (int (reduce + neighbors)) (count neighbors))]
+        (quot (+ (int cell-color) avg-color) (int 2))))))
 
 (defn coloring [generation word n8]
   (map (color generation word n8)))
@@ -91,12 +99,14 @@
       (f @generation data))))
 
 (defn make-index-n8 [w h]
-  (let [tx (td w)
+  (let [w (long w)
+        h (long h)
+        tx (td w)
         ty (td h)
         t8 (partial neighborhood-8 tx ty)]
     (into [] (for [x (range w)
                    y (range h)]
-               (vec (map (fn [[x y]] (+ (* x h) y)) (t8 [x y])))))))
+               (vec (map (fn [[x y]] (+ (* (long x) h) (long y))) (t8 [x y])))))))
 
 (defn ca-for-color [w h]
   (let [n8 (make-index-n8 w h)]
@@ -118,19 +128,22 @@
   (bench ; Make seeds for color: 101 ms
     #(dorun 60 (repeatedly (fn [] (make-seed-for-color 72 36)))))
 
+  (bench ; Make index for n8: 38 ms
+    #(make-index-n8 72 36))
+
   (bench ; Make index for n8: 2.6 sec
     #(dorun 60 (repeatedly (fn [] (make-index-n8 72 36)))))
 
-  (bench ; CA for color 1: 44 ms
+  (bench ; CA for color 1: 42 ms
     #(-> (ca-for-color 72 36) (nth 0)))
 
-  (bench ; CA for color 2: 56 ms
+  (bench ; CA for color 2: 50 ms
     #(-> (ca-for-color 72 36) (nth 1)))
 
-  (bench ; CA for color 60: 777 ms
+  (bench ; CA for color 60: 600 ms
     #(-> (ca-for-color 72 36) (nth 59)))
 
-  (bench ; CA for color 600: 6.45 sec
+  (bench ; CA for color 600: 5.5 sec
     #(-> (ca-for-color 72 36) (nth 599)))
 
   )
@@ -147,13 +160,15 @@
   (q/stroke 0)
   (let [cells (:cells state)
         radius (:cell-radius state)
-        size (:cell-size state)
-        top (:top-margin state)
+        size (int (:cell-size state))
+        top (int (:top-margin state))
         height (:ca-height state)
         i->xy (partial ->xy height)]
     (doseq [[i color] (map vector (range) cells)]
       (q/fill color 100 100)
-      (let [[x y] (i->xy i)]
+      (let [[x y] (i->xy i)
+            x (int x)
+            y (int y)]
         (q/rect (* size x) (+ (* size y) top) size size radius)))))
 
 (defn draw-text [state]
