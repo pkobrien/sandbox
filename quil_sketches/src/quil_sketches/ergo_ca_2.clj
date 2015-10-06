@@ -9,106 +9,43 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 
-(def neighborhood-8-x (juxt inc inc identity dec dec dec identity inc))
-(def neighborhood-8-y (juxt identity inc inc inc identity dec dec dec))
-
-(defn neighborhood-8-tx [tx]
-  (let [t-inc (comp tx inc)
-        t-dec (comp tx dec)]
-    (juxt t-inc t-inc identity t-dec t-dec t-dec identity t-inc)))
-
-(defn neighborhood-8-ty [ty]
-  (let [t-inc (comp ty inc)
-        t-dec (comp ty dec)]
-    (juxt identity t-inc t-inc t-inc identity t-dec t-dec t-dec)))
-
-(defn neighborhood-8
-  ([[x y]]
-   (map vector (neighborhood-8-x x) (neighborhood-8-y y)))
-  ([tx ty [x y]]
-   (map vector ((neighborhood-8-tx tx) x) ((neighborhood-8-ty ty) y))))
-
-(defn produce
-  "Returns a lazy sequence of colls from a recursive, axiomatic, transducible
-   process."
-  [seed prep-f get-xf]
-  (letfn [(process
-            [coll]
-            (lazy-seq
-              (when (seq coll)
-                (let [new-coll (into (empty coll) (get-xf coll) (prep-f coll))]
-                  (cons new-coll (process new-coll))))))]
-    (process seed)))
-
-(defn dense-ca-system
-  [seed get-xf]
-  (cons seed (produce seed identity get-xf)))
-
-(defn make-seed-f [w h f]
+(defn make-seed
+  "Returns a vector of values based on calling f, which should return a lazy
+   infinite sequence."
+  [w h f]
   (vec (take (* (long w) (long h)) (f))))
 
 (defn make-seed-for-age [w h]
-  (make-seed-f w h #(repeat (long 0))))
+  (make-seed w h #(repeat (long 0))))
 
 (def random-color (partial rand-int 360))
 
 (defn make-seed-for-color [w h]
-  (make-seed-f w h #(repeatedly random-color)))
+  (make-seed w h #(repeatedly random-color)))
 
-(defn color [generation word n8]
-  (let [index (volatile! (long -1))]
-    (fn context-sensitive-color [cell-color]
-      (vswap! index #(inc (long %)))
-      (let [neighbors (map #(nth word %) (nth n8 @index))
-            avg-color (quot (int (reduce + neighbors)) (count neighbors))]
-        (quot (+ (int cell-color) avg-color) (int 2))))))
+(defn cell-color
+  "Returns a color influenced by the colors of neighboring cells."
+  [[color neighbors]]
+  (let [color (int color)
+        n (int (count neighbors))
+        color-total (+ (* 200 color) (int (reduce + neighbors)))
+        color-count (+ 200 n)
+        color-average (quot color-total color-count)]
+    color-average))
 
-(defn coloring [generation word n8]
-  (map (color generation word n8)))
+(defn cell-coloring
+  "Returns a cell-coloring transducer."
+  []
+  (map cell-color))
 
-(defn gen
-  "Returns a function that, when called, will call f with an incremented
-   generation number and an additional context argument."
-  [f]
-  (let [generation (volatile! (long -1))]
-    (fn
-      [data]
-      (vswap! generation #(inc (long %)))
-      (f @generation data))))
-
-(defn td
-  "Returns a function that returns the toroidal value of i for an extent."
-  [extent]
-  (let [extent (long extent)]
-    (fn [i]
-      (mod (long i) extent))))
-
-(defn hi->xy
-  "Returns the [x y] coordinates for index based on the height of the grid."
-  [h i]
-  (let [h (long h)
-        i (long i)]
-    [(quot i h) (mod i h)]))
-
-(defn whxy->i
-  "Returns the index for the [x y] coordinates with toroidal adjustments."
-  [w h [x y]]
-  (let [w (long w)
-        h (long h)
-        tx (td w)
-        ty (td h)]
-    (+ (* (long (tx x)) h) (long (ty y)))))
-
-(defn make-index-n8 [w h]
-  (let [xy->i (partial whxy->i w h)]
-    (into [] (for [x (range w)
-                   y (range h)]
-               (vec (map xy->i (neighborhood-8 [x y])))))))
-
-(defn ca-for-color [w h]
-  (let [n8 (make-index-n8 w h)]
-    (dense-ca-system (make-seed-for-color w h)
-                     (gen (fn [generation word] (coloring generation word n8))))))
+(defn example-color-ca-system [w h]
+  (let [seed (make-seed w h #(repeatedly random-color))
+        neighbors-index (ergo/make-neighbors-index w h ergo/neighborhood-8)]
+    (ergo/dense-ca-system
+      seed
+      (ergo/gen (fn [generation word]
+                  (comp (ergo/contextualizing word neighbors-index)
+                        (cell-coloring)))))))
 
 
 ; ------------------------------------------------------------------------------
@@ -125,23 +62,20 @@
   (bench ; Make seeds for color: 101 ms
     #(dorun 60 (repeatedly (fn [] (make-seed-for-color 72 36)))))
 
-  (bench ; Make index for n8: 38 ms
-    #(make-index-n8 72 36))
+  (bench ; Make index for n8: 37 ms
+    #(ergo/make-neighbors-index 72 36 ergo/neighborhood-8))
 
-  (bench ; Make index for n8: 2.6 sec
-    #(dorun 60 (repeatedly (fn [] (make-index-n8 72 36)))))
-
-  (bench ; CA for color 1: 42 ms
-    #(-> (ca-for-color 72 36) (nth 0)))
+  (bench ; CA for color 1: 37 ms
+    #(-> (example-color-ca-system 72 36) (nth 0)))
 
   (bench ; CA for color 2: 50 ms
-    #(-> (ca-for-color 72 36) (nth 1)))
+    #(-> (example-color-ca-system 72 36) (nth 1)))
 
-  (bench ; CA for color 60: 600 ms
-    #(-> (ca-for-color 72 36) (nth 59)))
+  (bench ; CA for color 60: 635 ms
+    #(-> (example-color-ca-system 72 36) (nth 59)))
 
-  (bench ; CA for color 600: 5.5 sec
-    #(-> (ca-for-color 72 36) (nth 599)))
+  (bench ; CA for color 600: 6 sec
+    #(-> (example-color-ca-system 72 36) (nth 599)))
 
   )
 
@@ -160,7 +94,7 @@
         size (int (:cell-size state))
         top (int (:top-margin state))
         height (:ca-height state)
-        i->xy (partial hi->xy height)]
+        i->xy (partial ergo/hi->xy height)]
     (doseq [[i color] (map vector (range) cells)]
       (q/fill color 100 100)
       (let [[x y] (i->xy i)
@@ -212,6 +146,6 @@
 
 (comment
 
-  (sketch (setup-opts 20) (get-state (ca-for-color 72 36)))
+  (sketch (setup-opts 20) (get-state (example-color-ca-system 72 36)))
 
   )
