@@ -1,4 +1,4 @@
-(defproject quil_sketches "0.1.0-SNAPSHOT"
+(defproject quil-sketches "0.1.0-SNAPSHOT"
   :description "Sketching out some ideas"
   :url "https://github.com/pkobrien/sandbox/quil_sketches"
   :license {:name "Eclipse Public License"

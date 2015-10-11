@@ -12,8 +12,8 @@
 (defn make-seed-2
   "Returns a vector of values based on calling (f x y)."
   [w h f]
-  (vec (for [x (range w)
-             y (range h)]
+  (vec (for [y (range h)
+             x (range w)]
          (f x y))))
 
 (defn make-seed-for-pattern
@@ -59,7 +59,7 @@
 
 (defn example-color-blend-ca-system [w h]
   (let [seed (make-seed-for-random-color w h)
-        neighbors-index (ergo/make-neighbors-index ergo/neighborhood-8 w h)
+        neighbors-index (ergo/make-neighbors-lookup ergo/neighborhood-8 w h)
         contextualizing (partial ergo/contextualizing neighbors-index)
         coloring (cell-color-blending 200)]
     (ergo/dense-ca-system
@@ -74,55 +74,6 @@
 (defn make-seed-for-random-life [w h]
   (make-seed w h #(repeatedly random-life)))
 
-(defn old-cell-life
-  "Returns a cell whose life status depends on neighboring cells."
-  [survive? birth? [cell neighbors]]
-  (let [live-neighbor-count (reduce + neighbors)]
-    (if (= cell 1)
-      (if (survive? live-neighbor-count) 1 0)
-      (if (birth? live-neighbor-count) 1 0))))
-
-(defn old-cell-living
-  "Returns a cell living/dying transducer."
-  [survive? birth?]
-  (map (partial old-cell-life survive? birth?)))
-
-(defn old-life-ca-system [survive? birth? nf w h]
-  (let [seed (make-seed-for-random-life w h)
-        neighbors-index (ergo/make-neighbors-index nf w h)
-        contextualizing (partial ergo/contextualizing neighbors-index)
-        living (old-cell-living survive? birth?)]
-    (ergo/dense-ca-system
-      seed
-      (ergo/gen (fn [generation word]
-                  (comp (contextualizing word)
-                        living))))))
-
-
-(defn cell-life
-  "Returns a function that returns a cell whose fate depends on the number of
-   live neighboring cells."
-  [live-cell dead-cell alive? survive? birth?]
-  (fn cell-fate [[cell neighbors]]
-    (let [live-neighbor-count (count (filter alive? neighbors))]
-      (if (alive? cell)
-        (if (survive? live-neighbor-count) live-cell dead-cell)
-        (if (birth? live-neighbor-count) live-cell dead-cell)))))
-
-(defn cell-living
-  "Returns a cell living/dying transducer."
-  [live-cell dead-cell alive? survive? birth?]
-  (map (cell-life live-cell dead-cell alive? survive? birth?)))
-
-(defn dense-life-ca-system
-  [survive? birth? nf live-cell dead-cell seed w h]
-  (let [neighbors-index (ergo/make-neighbors-index nf w h)
-        contextualizing (partial ergo/contextualizing neighbors-index)
-        alive? (fn [cell] (= live-cell cell))
-        living (cell-living live-cell dead-cell alive? survive? birth?)]
-    (ergo/dense-ca-system seed (ergo/gen (fn [generation word]
-                                 (comp (contextualizing word)
-                                       living))))))
 
 ; ------------------------------------------------------------------------------
 ; Benchmarking
@@ -139,13 +90,7 @@
     #(dorun 60 (repeatedly (fn [] (make-seed-for-random-color 72 36)))))
 
   (bench ; Make index for n8: 37 ms
-    #(ergo/make-neighbors-index ergo/neighborhood-8 72 36))
-
-  (bench ; Color Blend - 1 gens: 37 ms
-    #(-> (example-color-blend-ca-system 72 36) (nth 0)))
-
-  (bench ; Color Blend - 2 gens: 50 ms
-    #(-> (example-color-blend-ca-system 72 36) (nth 1)))
+    #(ergo/make-neighbors-lookup ergo/neighborhood-8 72 36))
 
   (bench ; Color Blend - 60 gens: 635 ms
     #(-> (example-color-blend-ca-system 72 36) (nth 59)))
@@ -153,41 +98,30 @@
   (bench ; Color Blend - 600 gens: 6 sec
     #(-> (example-color-blend-ca-system 72 36) (nth 599)))
 
-  (bench ; Old Conway GOL - Random Seed - [1 0] - 60 gens: 470 ms
-    #(-> (old-life-ca-system #{2 3} #{3}
-                             ergo/neighborhood-8 72 36) (nth 59)))
-
-  (bench ; Local Conway GOL - Random Seed - [1 0] - 60 gens: 570 ms
-    #(-> (dense-life-ca-system
-           #{2 3} #{3} ergo/neighborhood-8 1 0
-           (ergo/make-seed-for-random-cell-value [1 0] 72 36) 72 36)
-         (nth 59)))
-
-  (bench ; Conway GOL - Random Seed - [1 0] - 60 gens: 580 ms
-    #(-> (ergo/dense-life-ca-system
-           #{2 3} #{3} ergo/neighborhood-8 1 0
-           (ergo/make-seed-for-random-cell-value [1 0] 72 36) 72 36)
-         (nth 59)))
-
   (bench ; Conway GOL - Random Seed - [:alive :dead] - 60 gens: 570 ms
     #(-> (ergo/dense-life-ca-system
            #{2 3} #{3} ergo/neighborhood-8 :alive :dead
            (ergo/make-seed-for-random-cell-value [:alive :dead] 72 36) 72 36)
          (nth 59)))
 
-  (bench ; Conway GOL - Random Seed - [true false] - 60 gens: 560 ms
-    #(-> (ergo/dense-life-ca-system
-           #{2 3} #{3} ergo/neighborhood-8 true false
-           (ergo/make-seed-for-random-cell-value [true false] 72 36) 72 36)
-         (nth 59)))
 
-
-
-  (bench ; Conway GOL - Acorn Seed - [:alive :dead] - 60 gens: 550 ms
+  (bench ; Conway GOL - Acorn Seed - [:alive :dead] - 60 gens: 480 ms
     #(-> (ergo/dense-life-ca-system
            #{2 3} #{3} ergo/neighborhood-8 :alive :dead
            (make-seed-for-acorn :alive :dead 72 36) 72 36)
          (nth 59)))
+
+  (bench ; Conway GOL - Acorn Seed - [1 0] - 60 gens: 480 ms
+    #(-> (ergo/dense-life-ca-system
+           #{2 3} #{3} ergo/neighborhood-8 1 0
+           (make-seed-for-acorn 1 0 72 36) 72 36)
+         (nth 59)))
+
+  (bench ; Conway GOL - Acorn Seed - [1 0] - 100 gens: 750 ms
+    #(-> (ergo/dense-life-ca-system
+           #{2 3} #{3} ergo/neighborhood-8 1 0
+           (make-seed-for-acorn 1 0 72 36) 72 36)
+         (nth 99)))
 
   )
 
@@ -272,10 +206,83 @@
 ; ------------------------------------------------------------------------------
 ; Quil Life-Like Cells
 
+;(defn life-sketch [setup-opts draw-f state]
+;  (q/sketch
+;    :title "Cellular Automata"
+;    :size [1080 640]
+;    :setup (partial setup setup-opts state)
+;    :update update-state
+;    :draw draw-f
+;    :features [:keep-on-top]
+;    :middleware [m/fun-mode]))
+;
+;(defn life-setup-opts [fps]
+;  {:frame-rate fps
+;   :color-mode [:hsb 360 100 100]})
+;
+;(defn life-get-state [system]
+;  {:ca-seq system
+;   :ca-height 108
+;   :cells nil
+;   :cell-radius 1
+;   :cell-size 5
+;   :frame 0
+;   :generation 0
+;   :running true
+;   :top-margin 100})
+;
+;(defn draw-life-cells [state]
+;  (q/stroke 0)
+;  (let [cells (:cells state)
+;        radius (:cell-radius state)
+;        size (int (:cell-size state))
+;        top (int (:top-margin state))
+;        height (:ca-height state)
+;        i->xy (partial ergo/hi->xy height)
+;        hue 200]
+;    (doseq [[i cell] (map vector (range) cells)]
+;      (when (= :alive cell)
+;        (q/fill hue 100 100)
+;        (let [[x y] (i->xy i)
+;              x (int x)
+;              y (int y)]
+;          (q/rect (* size x) (+ (* size y) top) size size radius))))))
+;
+;(defn draw-life-text [state]
+;  (q/fill 0)
+;  (q/text-size 20)
+;  (q/text (str "Frame: " (q/frame-count)) 10 30)
+;  (q/text (str "FPS: " (int (q/current-frame-rate))) 10 60))
+;
+;(defn draw-life-state [state]
+;  (q/background 220)
+;  (when (:cells state)
+;    (draw-life-cells state)
+;    (draw-life-text state)))
+;
+;(comment
+;
+;  (life-sketch
+;    (life-setup-opts 60)
+;    draw-life-state
+;    (life-get-state
+;      (ergo/dense-life-ca-system
+;        #{2 3} #{3} ergo/neighborhood-8 :alive :dead
+;        (make-seed-for-acorn :alive :dead 216 108) 216 108)
+;      #_(old-life-ca-system #{2 3} #{3}
+;                              ergo/neighborhood-8
+;                              144 72)))
+;
+;  )
+
+
+; ------------------------------------------------------------------------------
+; Quil Life-Like Cells using Pixels
+
 (defn life-sketch [setup-opts draw-f state]
   (q/sketch
     :title "Cellular Automata"
-    :size [1080 640]
+    :size [(:ca-width state) (:ca-height state)]
     :setup (partial setup setup-opts state)
     :update update-state
     :draw draw-f
@@ -288,44 +295,24 @@
 
 (defn life-get-state [system]
   {:ca-seq system
-   :ca-height 108
-   :cells nil
-   :cell-radius 1
-   :cell-size 5
-   :frame 0
-   :generation 0
-   :running true
-   :top-margin 100})
+   :ca-width 360
+   :ca-height 360
+   :cells nil})
 
 (defn draw-life-cells [state]
-  (q/stroke 0)
-  (let [cells (:cells state)
-        radius (:cell-radius state)
-        size (int (:cell-size state))
-        top (int (:top-margin state))
-        height (:ca-height state)
-        i->xy (partial ergo/hi->xy height)
-        hue 200]
+  (let [pixels (q/pixels)
+        cells (:cells state)
+        alive-color (q/color 300 100 100)
+        dead-color (q/color 100 100 100)]
     (doseq [[i cell] (map vector (range) cells)]
-      (when (= :alive cell)
-        (q/fill hue 100 100)
-        (let [[x y] (i->xy i)
-              x (int x)
-              y (int y)]
-          (q/rect (* size x) (+ (* size y) top) size size radius))))))
-
-(defn draw-life-text [state]
-  (q/fill 0)
-  (q/text-size 20)
-  (q/text (str "Frame: " (q/frame-count)) 10 30)
-  (q/text (str "FPS: " (int (q/current-frame-rate))) 10 60))
+      (if (= :alive cell)
+        (aset-int pixels i alive-color)
+        (aset-int pixels i dead-color)))
+    (q/update-pixels)))
 
 (defn draw-life-state [state]
-  (q/background 220)
   (when (:cells state)
-    (draw-life-cells state)
-    (draw-life-text state)))
-
+    (draw-life-cells state)))
 
 (comment
 
@@ -335,9 +322,6 @@
     (life-get-state
       (ergo/dense-life-ca-system
         #{2 3} #{3} ergo/neighborhood-8 :alive :dead
-        (make-seed-for-acorn :alive :dead 216 108) 216 108)
-      #_(old-life-ca-system #{2 3} #{3}
-                              ergo/neighborhood-8
-                              144 72)))
+        (make-seed-for-acorn :alive :dead 360 360) 360 360)))
 
   )
