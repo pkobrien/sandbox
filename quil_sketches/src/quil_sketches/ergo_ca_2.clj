@@ -42,31 +42,31 @@
 (defn make-seed-for-random-color [w h]
   (make-seed w h (fn [x y] (random-color))))
 
-(defn cell-color-blend
-  "Returns a color influenced by the colors of neighboring cells."
-  [weight [cell neighbors]]
-  (let [weight (int weight)
-        color (int cell)
-        n (int (count neighbors))
-        color-total (+ (* weight color) (int (reduce + neighbors)))
-        color-count (+ weight n)]
-    (quot color-total color-count)))
-
-(defn cell-color-blending
-  "Returns a cell color-blending transducer."
-  [weight]
-  (map (partial cell-color-blend weight)))
-
-(defn example-color-blend-ca-system [w h]
-  (let [seed (make-seed-for-random-color w h)
-        neighbors-index (ergo/make-neighbors-lookup ergo/neighborhood-8 w h)
-        contextualizing (partial ergo/contextualizing neighbors-index)
-        coloring (cell-color-blending 200)]
-    (ergo/dense-ca-system
-      seed
-      (ergo/gen (fn [generation word]
-                  (comp (contextualizing word)
-                        coloring))))))
+;(defn cell-color-blend
+;  "Returns a color influenced by the colors of neighboring cells."
+;  [weight [cell neighbors]]
+;  (let [weight (int weight)
+;        color (int cell)
+;        n (int (count neighbors))
+;        color-total (+ (* weight color) (int (reduce + neighbors)))
+;        color-count (+ weight n)]
+;    (quot color-total color-count)))
+;
+;(defn cell-color-blending
+;  "Returns a cell color-blending transducer."
+;  [weight]
+;  (map (partial cell-color-blend weight)))
+;
+;(defn example-color-blend-ca-system [w h]
+;  (let [seed (make-seed-for-random-color w h)
+;        neighbors-index (ergo/make-neighbors-lookup ergo/neighborhood-8 w h)
+;        contextualizing (partial ergo/contextualizing neighbors-index)
+;        coloring (cell-color-blending 200)]
+;    (ergo/dense-ca-system
+;      seed
+;      (ergo/gen (fn [generation word]
+;                  (comp (contextualizing word)
+;                        coloring))))))
 
 
 (def random-life (partial rand-int 2))
@@ -92,11 +92,11 @@
   (bench ; Make index for n8: 37 ms
     #(ergo/make-neighbors-lookup ergo/neighborhood-8 72 36))
 
-  (bench ; Color Blend - 60 gens: 635 ms
-    #(-> (example-color-blend-ca-system 72 36) (nth 59)))
-
-  (bench ; Color Blend - 600 gens: 6 sec
-    #(-> (example-color-blend-ca-system 72 36) (nth 599)))
+  ;(bench ; Color Blend - 60 gens: 635 ms
+  ;  #(-> (example-color-blend-ca-system 72 36) (nth 59)))
+  ;
+  ;(bench ; Color Blend - 600 gens: 6 sec
+  ;  #(-> (example-color-blend-ca-system 72 36) (nth 599)))
 
   (bench ; Conway GOL - Random Seed - [:alive :dead] - 60 gens: 570 ms
     #(-> (ergo/dense-life-ca-system
@@ -105,22 +105,54 @@
          (nth 59)))
 
 
-  (bench ; Conway GOL - Acorn Seed - [:alive :dead] - 60 gens: 480 ms
+  (bench ; Conway GOL - Acorn Seed - [:alive :dead] - 60 gens: 430 ms
     #(-> (ergo/dense-life-ca-system
            #{2 3} #{3} ergo/neighborhood-8 :alive :dead
            (make-seed-for-acorn :alive :dead 72 36) 72 36)
          (nth 59)))
 
-  (bench ; Conway GOL - Acorn Seed - [1 0] - 60 gens: 480 ms
+  (bench ; Conway GOL - Acorn Seed - [1 0] - 60 gens: 430 ms
     #(-> (ergo/dense-life-ca-system
            #{2 3} #{3} ergo/neighborhood-8 1 0
            (make-seed-for-acorn 1 0 72 36) 72 36)
          (nth 59)))
 
-  (bench ; Conway GOL - Acorn Seed - [1 0] - 100 gens: 750 ms
+  (bench ; Conway GOL - Acorn Seed - [1 0] - 60 gens: 130 ms
+    #(-> (ergo/dense-life-candidate-set-ca-system
+           #{2 3} #{3} ergo/neighborhood-8 1 0
+           (make-seed-for-acorn 1 0 72 36) 72 36)
+         (nth 59)))
+
+  (bench ; Conway GOL - Acorn Seed - [1 0] - 60 gens: 111 ms
+    #(-> (ergo/dense-life-candidate-counts-ca-system
+           #{2 3} #{3} ergo/neighborhood-8 1 0
+           (make-seed-for-acorn 1 0 72 36) 72 36)
+         (nth 59)))
+
+
+  (bench ; Conway GOL - Acorn Seed - [1 0] - 100 gens: 670 ms
     #(-> (ergo/dense-life-ca-system
            #{2 3} #{3} ergo/neighborhood-8 1 0
            (make-seed-for-acorn 1 0 72 36) 72 36)
+         (nth 99)))
+
+  (bench ; Conway GOL - Fast! - Acorn Seed - [1 0] - 100 gens: 220 ms
+    #(-> (ergo/dense-life-candidate-set-ca-system
+           #{2 3} #{3} ergo/neighborhood-8 1 0
+           (make-seed-for-acorn 1 0 72 36) 72 36)
+         (nth 99)))
+
+  (bench ; Conway GOL - Faster! - Acorn Seed - [1 0] - 100 gens: 170 ms
+    #(-> (ergo/dense-life-candidate-counts-ca-system
+           #{2 3} #{3} ergo/neighborhood-8 1 0
+           (make-seed-for-acorn 1 0 72 36) 72 36)
+         (nth 99)))
+
+
+  (bench ; Conway GOL - Faster! - Acorn Seed - [1 0] - 100 gens: 2 sec
+    #(-> (ergo/dense-life-candidate-counts-ca-system
+           #{2 3} #{3} ergo/neighborhood-8 1 0
+           (make-seed-for-acorn 1 0 200 200) 200 200)
          (nth 99)))
 
   )
@@ -279,12 +311,35 @@
 ; ------------------------------------------------------------------------------
 ; Quil Life-Like Cells using Pixels
 
-(defn life-sketch [setup-opts draw-f state]
+(defn get-draw-cell-f
+  [w alive-color dead-color]
+  (fn [pixels old-cells ^long index new-cell]
+    (when (not= new-cell (old-cells index))
+      (let [color (if (= :alive new-cell) alive-color dead-color)
+            [x y] (ergo/wi->xy w index)
+            x (* 2 (int x))
+            y (* 2 (int y))
+            w (* 2 (int w))]
+        (aset-int pixels (+ (* y w) x) color)
+        (aset-int pixels (+ (* y w) x (int 1)) color)
+        (aset-int pixels (+ (* y w) x w) color)
+        (aset-int pixels (+ (* y w) x w (int 1)) color)
+        ))))
+
+(defn life-setup [w setup-opts state]
+  (q/frame-rate (:frame-rate setup-opts))
+  (apply q/color-mode (:color-mode setup-opts))
+  (let [alive-color (q/color 300 100 100)
+        dead-color (q/color 100 100 100)]
+    (merge state
+           {:draw-cell (get-draw-cell-f w alive-color dead-color)})))
+
+(defn life-sketch [w h setup-opts update-f draw-f state]
   (q/sketch
     :title "Cellular Automata"
-    :size [(:ca-width state) (:ca-height state)]
-    :setup (partial setup setup-opts state)
-    :update update-state
+    :size [(* 2 (int w)) (* 2 (int h))]
+    :setup (partial life-setup w setup-opts state)
+    :update update-f
     :draw draw-f
     :features [:keep-on-top]
     :middleware [m/fun-mode]))
@@ -293,35 +348,43 @@
   {:frame-rate fps
    :color-mode [:hsb 360 100 100]})
 
-(defn life-get-state [system]
-  {:ca-seq system
-   :ca-width 360
-   :ca-height 360
-   :cells nil})
+(defonce ca-state
+  (atom {:generations nil
+         :new-cells nil
+         :old-cells nil}))
 
-(defn draw-life-cells [state]
+(defn life-draw-state [state]
+  ;(q/background 220)
   (let [pixels (q/pixels)
-        cells (:cells state)
-        alive-color (q/color 300 100 100)
-        dead-color (q/color 100 100 100)]
-    (doseq [[i cell] (map vector (range) cells)]
-      (if (= :alive cell)
-        (aset-int pixels i alive-color)
-        (aset-int pixels i dead-color)))
-    (q/update-pixels)))
+        new-cells (:new-cells @ca-state)
+        old-cells (:old-cells @ca-state)
+        draw-cell (partial (:draw-cell state) pixels old-cells)]
+    (dorun (map-indexed draw-cell new-cells))
+    (q/update-pixels)
+    ;(q/fill 0)
+    ;(q/text-size 20)
+    ;(q/text (str "FPS: " (int (q/current-frame-rate))) 10 30)
+    ;(q/text (str "Frame: " (q/frame-count)) 100 30)
+    )
+  )
 
-(defn draw-life-state [state]
-  (when (:cells state)
-    (draw-life-cells state)))
+(defn do-life [^long w ^long h fps]
+  (let [system (ergo/dense-life-candidate-counts-ca-system
+                 #{2 3} #{3} ergo/neighborhood-8 :alive :dead
+                 (make-seed-for-acorn :alive :dead w h) w h)
+        update (fn [state]
+                 (let [ca @ca-state]
+                   (reset! ca-state {:old-cells (:new-cells ca)
+                                     :new-cells (first (:generations ca))
+                                     :generations (rest (:generations ca))}))
+                 state)]
+    (reset! ca-state {:old-cells (vec (repeat (* w h) :dead))
+                      :new-cells (first system)
+                      :generations (rest system)})
+    (life-sketch w h (life-setup-opts fps) update life-draw-state {})))
 
 (comment
 
-  (life-sketch
-    (life-setup-opts 60)
-    draw-life-state
-    (life-get-state
-      (ergo/dense-life-ca-system
-        #{2 3} #{3} ergo/neighborhood-8 :alive :dead
-        (make-seed-for-acorn :alive :dead 360 360) 360 360)))
+  (do-life 720 360 60)
 
   )
