@@ -4,7 +4,6 @@
             [quil.core :as q]
             [quil.middleware :as m]))
 
-
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
@@ -90,7 +89,7 @@
     #(dorun 60 (repeatedly (fn [] (make-seed-for-random-color 72 36)))))
 
   (bench ; Make index for n8: 37 ms
-    #(ergo/make-neighbors-lookup ergo/neighborhood-8 72 36))
+    #(ergo/make-neighborhood-lookup ergo/neighborhood-8 72 36))
 
   ;(bench ; Color Blend - 60 gens: 635 ms
   ;  #(-> (example-color-blend-ca-system 72 36) (nth 59)))
@@ -101,7 +100,7 @@
   (bench ; Conway GOL - Random Seed - [:alive :dead] - 60 gens: 570 ms
     #(-> (ergo/dense-life-ca-system
            #{2 3} #{3} ergo/neighborhood-8 :alive :dead
-           (ergo/make-seed-for-random-cell-value [:alive :dead] 72 36) 72 36)
+           (ergo/make-seed-for-random-value [:alive :dead] 72 36) 72 36)
          (nth 59)))
 
 

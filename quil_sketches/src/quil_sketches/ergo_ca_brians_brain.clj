@@ -10,7 +10,7 @@
 
 
 ; ------------------------------------------------------------------------------
-;  Brian's Brain Cellular Automata
+; Brian's Brain Cellular Automata
 
 (defn cell-state-candidate-set
   "Returns a function that determines the fate of a cell."
@@ -29,7 +29,7 @@
 
 (defn dense-candidate-set-ca-system
   [birth? neighborhood-f on-cell off-cell dying-cell seed w h]
-  (let [neighbors-lookup (ergo/make-neighbors-lookup neighborhood-f w h)
+  (let [neighbors-lookup (ergo/make-neighborhood-lookup neighborhood-f w h)
         on-count-f (ergo/cell-counter on-cell)
         life (partial cell-state-candidate-set on-cell off-cell dying-cell
                       birth? on-count-f)]
@@ -42,7 +42,7 @@
 
 
 ; ------------------------------------------------------------------------------
-;  Quil Drawing
+; Quil Drawing
 
 (defn get-draw-cell-f
   [w on-color dying-color off-color]
@@ -73,7 +73,7 @@
 
 (defn sketch [w h setup-opts update-f draw-f state]
   (q/sketch
-    :title "Cellular Automata"
+    :title "Brian's Brains"
     :size [(* 2 (int w)) (* 2 (int h))]
     :setup (partial setup w setup-opts state)
     :update update-f
@@ -101,10 +101,25 @@
     )
   )
 
-(defn do-brain [^long w ^long h fps]
+(defn do-brain-acorn [^long w ^long h fps]
   (let [system (dense-candidate-set-ca-system
                  #{2} ergo/neighborhood-8 :on :off :dying
-                 (ergo/make-seed-for-random-cell-value [:on :off] w h) w h)
+                 (ergo/make-seed-for-acorn :on :off w h) w h)
+        update (fn [state]
+                 (let [ca @ca-state]
+                   (reset! ca-state {:old-cells (:new-cells ca)
+                                     :new-cells (first (:generations ca))
+                                     :generations (rest (:generations ca))}))
+                 state)]
+    (reset! ca-state {:old-cells (vec (repeat (* w h) :dead))
+                      :new-cells (first system)
+                      :generations (rest system)})
+    (sketch w h (setup-opts fps) update draw-state {})))
+
+(defn do-brain-random [^long w ^long h fps]
+  (let [system (dense-candidate-set-ca-system
+                 #{2} ergo/neighborhood-8 :on :off :dying
+                 (ergo/make-seed-with-random-values [:on :off] w h) w h)
         update (fn [state]
                  (let [ca @ca-state]
                    (reset! ca-state {:old-cells (:new-cells ca)
@@ -118,6 +133,25 @@
 
 (comment
 
-  (do-brain 360 180 60)
+  (do-brain-acorn 360 180 60)
+
+  (do-brain-random 360 180 2)
+
+  )
+
+
+; ------------------------------------------------------------------------------
+; Benchmarking
+
+(defn bench [f]
+  (cr/with-progress-reporting (cr/quick-bench (f) :verbose)))
+
+(comment
+
+  (bench ; Brian's Brain - Random 200x200 - 100 gens: 5.35 sec
+    #(-> (dense-candidate-set-ca-system
+           #{2} ergo/neighborhood-8 :on :off :dying
+           (ergo/make-seed-with-random-values [:on :off] 200 200) 200 200)
+         (nth 99)))
 
   )
